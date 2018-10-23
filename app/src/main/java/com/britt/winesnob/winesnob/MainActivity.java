@@ -1,23 +1,19 @@
 package com.britt.winesnob.winesnob;
 
 import android.content.ContentValues;
-import android.content.Context;
-import android.content.Intent;
 import android.os.AsyncTask;
-import android.os.Handler;
-import android.os.Looper;
+import android.os.Bundle;
 import android.provider.Settings;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
-import android.support.v7.widget.DividerItemDecoration;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
-import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
+import com.sap.cloud.mobile.fiori.indicator.FioriProgressBar;
 import com.sap.cloud.mobile.foundation.authentication.BasicAuthDialogAuthenticator;
+import com.sap.cloud.mobile.foundation.logging.Logging;
 import com.sap.cloud.mobile.foundation.networking.AppHeadersInterceptor;
 import com.sap.cloud.mobile.foundation.networking.WebkitCookieJar;
 import com.sap.cloud.mobile.foundation.securestore.CreateDatabaseCallback;
@@ -25,23 +21,21 @@ import com.sap.cloud.mobile.foundation.securestore.OpenFailureException;
 import com.sap.cloud.mobile.foundation.securestore.SecureDatabaseResultSet;
 import com.sap.cloud.mobile.foundation.securestore.SecureDatabaseStore;
 
-import com.sap.cloud.mobile.fiori.indicator.FioriProgressBar;
-
+import org.json.JSONArray;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import okhttp3.Call;
-import okhttp3.Callback;
+import java.util.ArrayList;
+
+import ch.qos.logback.classic.Level;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
-import org.json.JSONArray;
-
-import java.io.IOException;
-import java.util.ArrayList;
-
 
 public class MainActivity extends AppCompatActivity {
+    static Logger log = LoggerFactory.getLogger("com.my.package");
 
     //TextView currStatus;
     TextView timeInterval;
@@ -53,9 +47,7 @@ public class MainActivity extends AppCompatActivity {
     private static String connID;
     private static String serviceURL;
     private static String appVersion;
-    private Context context;
     private static String deviceID;
-    private static String APIKey;
     private static String myTag = "WINESNOB";
     private OkHttpClient myBasicAuthOkHttpClient;
 
@@ -65,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static SecureDatabaseStore localDB;
 
-    // database shit
+    // database stuff
     private static final String DATABASE_NAME = "myDatabase";
     private static final int DATABASE_VERSION = 1; // Increment the version number when there are schema changes
     private static final String CREATE_TABLE = "CREATE TABLE IF NOT EXISTS stores (id INTEGER UNIQUE PRIMARY KEY, name TEXT, add1 TEXT, add2 TEXT, city TEXT, postal_code TEXT, telephone TEXT)";
@@ -73,6 +65,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Logging.initialize(this, new Logging.ConfigurationBuilder().initialLevel(Level.DEBUG).logToConsole(true).build());
         setContentView(R.layout.activity_main);
 
         // Handle for recycler view
@@ -100,7 +93,6 @@ public class MainActivity extends AppCompatActivity {
         CreateOrOpenStore();
 
         // Basic Connection info
-        APIKey = getResources().getString(R.string.APIKEY);
         serviceURL = getResources().getString(R.string.SERVICE_URL);
         appID = getResources().getString(R.string.APPLICATION_ID);
         connID = getResources().getString(R.string.CONNECTION_ID);
@@ -108,11 +100,11 @@ public class MainActivity extends AppCompatActivity {
 
         deviceID = Settings.Secure.getString(this.getContentResolver(), Settings.Secure.ANDROID_ID);
 
-        Log.d(myTag, "In onRegister");
+        log.debug("In onRegister");
 
         try {
             myBasicAuthOkHttpClient = new OkHttpClient.Builder()
-                    .addInterceptor(new AppHeadersInterceptor(appID, deviceID, "1.0"))
+                    .addInterceptor(new AppHeadersInterceptor(appID, deviceID, appVersion))
                     .authenticator(new BasicAuthDialogAuthenticator())
                     .cookieJar(new WebkitCookieJar())
                     .build();
@@ -122,7 +114,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
         } catch (Exception e) {
-            Log.d("ERROR", e.getMessage());
+            log.error("ERROR: " + e.getMessage(), e);
         }
 
     }
@@ -138,7 +130,7 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onCreate(SecureDatabaseStore store) {
                         store.executeUpdate(CREATE_TABLE);
-                        Log.d(myTag, "Database Succesfully Created");
+                        log.debug("Database Succesfully Created");
                     }
 
                     @Override
@@ -149,6 +141,7 @@ public class MainActivity extends AppCompatActivity {
 
 
             if (!localDB.isOpen()) {
+                // Use the auto-generated encryption key by passing null.
                 localDB.open(null);
             }
 
@@ -165,15 +158,13 @@ public class MainActivity extends AppCompatActivity {
                     ReadOfflineStores();
                 }
 
-                Log.d(myTag, "There are " + totalRecords + " records in the stores table");
+                log.debug("There are " + totalRecords + " records in the stores table");
             }
 
 
-            Log.d(myTag, "Database opened");
-            // Or use the auto-generated encryption key by passing null.
-            // store.open(null);
-        } catch (Exception ex) {
-            Log.e(myTag, ex.getMessage(), ex);
+            log.debug("Database opened");
+        } catch (OpenFailureException e) {
+            log.error(e.getMessage(), e);
             // Some recovery here. For example, re-get the encryption key from the end user via UI...
         }
     }
@@ -212,8 +203,6 @@ public class MainActivity extends AppCompatActivity {
                 stores.add(currStore);
 
                 String name = rs.getString("name");
-
-                //Log.d(myTag, "Entry Value: " + name);
             }
 
             rs.close();
@@ -229,7 +218,7 @@ public class MainActivity extends AppCompatActivity {
 
 
         } catch (Exception e) {
-            Log.d(myTag, e.getMessage());
+            log.error(e.getMessage(), e);
         }
 
     }
@@ -263,13 +252,10 @@ public class MainActivity extends AppCompatActivity {
 
                     JSONObject jsonresponse = new JSONObject(response.body().string());
 
-
                     // Is this the last page?
                     JSONObject pager = jsonresponse.getJSONObject("pager");
                     lastPage = pager.getBoolean("is_final_page");
                     totalRecords = pager.getInt("total_record_count");
-
-                    progressBar.setIndeterminate(false);
 
                     // Let's get the data!
                     JSONArray jsonDataArray = jsonresponse.getJSONArray("result");
@@ -295,25 +281,17 @@ public class MainActivity extends AppCompatActivity {
                                 jsonData.getString("postal_code"),
                                 jsonData.getString("telephone")
                         );
-
-
                         sReturn.add(currStore);
-
-
                     }
 
                     if (!lastPage) {
                         pageNum++;
                     } else {
-                        Log.d(myTag, "FINALLY REACHED LAST PAGE");
+                        log.debug("FINALLY REACHED LAST PAGE");
                     }
-
                 }
-
             } catch (Exception e) {
-                Log.d(myTag, e.getMessage());
-                //sReturn.add(e.getMessage());
-
+                log.error(e.getMessage(), e);
             }
 
             return sReturn;
@@ -322,12 +300,13 @@ public class MainActivity extends AppCompatActivity {
         @Override
         protected void onProgressUpdate(Integer... values) {
             super.onProgressUpdate(values);
+            progressBar.setIndeterminate(false);
 
             double myProgress = (values[0].intValue()/(double)totalRecords) * 100;
 
             progressBar.setProgress((int)myProgress);
 
-            Log.d(myTag, "Fetched: " + values[0] + " Records");
+            log.debug("Fetched: " + values[0] + " Records");
 
         }
 
@@ -351,8 +330,6 @@ public class MainActivity extends AppCompatActivity {
                     content.put("telephone", entry.telephone);
 
                     localDB.executeInsert("stores", content);
-
-                    //Log.d(myTag, "Entry Value: " + entry.name);
                 }
 
                 localDB.commit();
@@ -361,7 +338,7 @@ public class MainActivity extends AppCompatActivity {
 
                 long ellapsedTime = endTime - startTime;
 
-                Log.d(myTag, "Successfully inserted " + Stores.size() + " records");
+                log.debug("Successfully inserted " + Stores.size() + " records");
 
                 // Show the amount of time it takes.
                 timeInterval.setText("Time taken: " + ellapsedTime + " milliseconds");
@@ -371,7 +348,7 @@ public class MainActivity extends AppCompatActivity {
 
             } catch (Exception e) {
                 localDB.rollback();
-                Log.d(myTag, e.getMessage());
+                log.error(e.getMessage(), e);
 
             }
             // show the store list, hide the progress bar
@@ -383,43 +360,25 @@ public class MainActivity extends AppCompatActivity {
 
 
     public void showStores (ArrayList<Store> stores) {
-
-        /*
-        StoreAdapter storeAdapter = new StoreAdapter(stores);
-        LinearLayoutManager mLayoutManager = new LinearLayoutManager(this);
-        storeData.setAdapter(storeAdapter);
-
-        storeData.setLayoutManager(mLayoutManager);
-
-        DividerItemDecoration mDividerItemDecoration = new DividerItemDecoration(storeData.getContext(),
-                mLayoutManager.getOrientation());
-
-        storeData.addItemDecoration(mDividerItemDecoration);
-        */
-
         ObjectCellStoreAdapter storeAdapter = new ObjectCellStoreAdapter(this, stores);
 
         LinearLayoutManager mLayoutManager = new LinearLayoutManager(this);
         storeData.setAdapter(storeAdapter);
 
         storeData.setLayoutManager(mLayoutManager);
-
-
     }
 
     public void GetStores() {
         // hide the store list, show the progress bar
-        storeData.setVisibility(View.INVISIBLE);        progressBar.setVisibility(View.VISIBLE);
+        storeData.setVisibility(View.INVISIBLE);
+        progressBar.setVisibility(View.VISIBLE);
 
         String sQuery = "/stores?access_key=MDo4MTgwMjhjZS05OTk3LTExZTgtODg0ZS04NzVhNTU1MmYyNjA6ZHg3UWpKUUxwTTVWamRxZ0E4bmFIWEVGZjVrT0ozMktLU0Qw&per_page=100";
 
         try {
-
             new getAsyncInfo().execute(sQuery);
-            //new RESTAsyncTask().execute(request);
-
         } catch (Exception e) {
-            Log.d(myTag, e.getMessage());
+            log.error(e.getMessage(), e);
         }
     }
 

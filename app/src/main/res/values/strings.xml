@@ -1,0 +1,8 @@
+<resources>
+    <string name="application_name">WineSnob</string>
+    <string name="SERVICE_URL">https://hcpms-p1942484295trial.hanatrial.ondemand.com/</string>
+    <string name="APPLICATION_ID">com.my.winesnob.app</string>
+    <string name="CONNECTION_ID">com.ima.winesnob</string>
+    <string name="APPLICATION_VERSION">1.0"</string>
+    <string name="APIKEY">MDo4MTgwMjhjZS05OTk3LTExZTgtODg0ZS04NzVhNTU1MmYyNjA6ZHg3UWpKUUxwTTVWamRxZ0E4bmFIWEVGZjVrT0ozMktLU0Qw</string>
+</resources>
